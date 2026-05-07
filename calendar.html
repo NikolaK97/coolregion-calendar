@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <title>Kalendář akcí</title>
+  <title>Kalendář akcí Coolregion</title>
 
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
@@ -11,12 +11,28 @@
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
+      background: #ffffff;
     }
 
     #calendar {
       max-width: 1200px;
       margin: auto;
       min-height: 700px;
+    }
+
+    .fc .fc-toolbar-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .fc .fc-button {
+      border-radius: 6px;
+    }
+
+    .fc-event {
+      cursor: pointer;
+      border: none;
+      padding: 2px 4px;
     }
 
     .error {
@@ -31,20 +47,58 @@
   <div id="calendar"></div>
 
   <script>
-    const SHEET_URL = "https://opensheet.elk.sh/1zi-FUGYSLdyz1jk0gom-_G0y_jX2BLk-L1VJbXajIcM/List%201";
+    const SHEET_URL = "https://opensheet.elk.sh/1ZufO1oT58PzJsBwWcVyt-lnjlgUg8DuJ-MyHpMfHq7Q/Akce";
+
+    function parseCzechDate(value) {
+      if (!value) return null;
+
+      const clean = String(value).trim();
+
+      const match = clean.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/);
+
+      if (!match) return null;
+
+      const day = match[1].padStart(2, "0");
+      const month = match[2].padStart(2, "0");
+      const year = match[3];
+
+      return `${year}-${month}-${day}`;
+    }
+
+    function containsCoolregion(value) {
+      return String(value || "")
+        .toLowerCase()
+        .includes("coolregion");
+    }
 
     async function loadEvents() {
       const response = await fetch(SHEET_URL);
       const data = await response.json();
 
-      return data.map(row => ({
-        title: row.nazev,
-        start: row.datum,
-        url: row.popisek,
-        extendedProps: {
-          location: row.lokace
-        }
-      }));
+      return data
+        .filter(row => containsCoolregion(row["Kde"]))
+        .map(row => {
+          const startDate =
+            parseCzechDate(row["Pomocný sloupec s datem začátku akce"]) ||
+            parseCzechDate(row["Termín"]);
+
+          if (!startDate) return null;
+
+          return {
+            title: row["Akce"] || row["Téma"] || "Akce",
+            start: startDate,
+            url: row["Odkaz"] || "",
+            extendedProps: {
+              misto: row["Místo"] || "",
+              tema: row["Téma"] || "",
+              popis: row["Popis akce"] || "",
+              poradatel: row["Pořádá"] || "",
+              ucast: row["Účast"] || "",
+              cilovaSkupina: row["Cílová skupina"] || ""
+            }
+          };
+        })
+        .filter(Boolean);
     }
 
     document.addEventListener("DOMContentLoaded", async function () {
@@ -57,12 +111,42 @@
             initialView: "dayGridMonth",
             locale: "cs",
             height: "auto",
+            firstDay: 1,
+
+            headerToolbar: {
+              left: "prev,next today",
+              center: "title",
+              right: "dayGridMonth,listMonth"
+            },
+
+            buttonText: {
+              today: "Dnes",
+              month: "Měsíc",
+              list: "Seznam"
+            },
+
             events: events,
+
             eventClick: function(info) {
               info.jsEvent.preventDefault();
 
-              if (info.event.url) {
-                window.open(info.event.url, "_blank");
+              const e = info.event;
+              const p = e.extendedProps;
+
+              let detail =
+                e.title + "\n\n" +
+                "Místo: " + (p.misto || "-") + "\n" +
+                "Téma: " + (p.tema || "-") + "\n" +
+                "Pořádá: " + (p.poradatel || "-") + "\n\n" +
+                (p.popis || "");
+
+              if (e.url) {
+                const openLink = confirm(detail + "\n\nOtevřít odkaz na akci?");
+                if (openLink) {
+                  window.open(e.url, "_blank");
+                }
+              } else {
+                alert(detail);
               }
             }
           }
@@ -72,64 +156,11 @@
 
       } catch (error) {
         document.getElementById("calendar").innerHTML =
-          '<div class="error">Kalendář se nepodařilo načíst. Zkontroluj JSON endpoint.</div>';
+          '<div class="error">Kalendář se nepodařilo načíst. Zkontroluj JSON endpoint a názvy sloupců.</div>';
 
         console.error(error);
       }
     });
   </script>
-</body>
-</html>    'https://opensheet.elk.sh/1zi-FUGYSLdyz1jk0gom-_G0y_jX2BLk-L1VJbXajIcM/List%201'
-  );
-
-  const data = await response.json();
-
-  return data.map(row => ({
-
-    title: decodeURIComponent(escape(row.nazev)),
-    start: row.datum,
-
-    extendedProps: {
-      location: decodeURIComponent(escape(row.lokace)),
-      description: decodeURIComponent(escape(row.popisek))
-    }
-
-  }));
-
-}
-
-document.addEventListener('DOMContentLoaded', async function () {
-
-  const events = await loadEvents();
-
-  const calendarEl = document.getElementById('calendar');
-
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-
-    locale: 'cs',
-
-    initialView: 'dayGridMonth',
-
-    height: 'auto',
-
-    events: events,
-
-    eventClick: function(info) {
-
-      window.open(
-        info.event.extendedProps.description,
-        '_blank'
-      );
-
-    }
-
-  });
-
-  calendar.render();
-
-});
-
-</script>
-
 </body>
 </html>
