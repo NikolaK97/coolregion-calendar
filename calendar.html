@@ -1,20 +1,13 @@
 <!DOCTYPE html>
 <html lang="cs">
-
 <head>
   <meta charset="UTF-8" />
-
   <title>Kalendář akcí Coolregion</title>
 
-  <link
-    href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css"
-    rel="stylesheet"
-  >
-
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 
   <style>
-
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
@@ -35,6 +28,299 @@
 
     .fc .fc-button {
       border-radius: 8px;
+      border: none;
+      padding: 8px 14px;
+    }
+
+    .fc-event {
+      cursor: pointer;
+      border: none !important;
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 13px;
+    }
+
+    .fc-event:hover {
+      opacity: 0.9;
+    }
+
+    #event-detail {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 28px;
+      border-radius: 16px;
+      background: #f8fafc;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      display: none;
+    }
+
+    #detail-title {
+      margin-top: 0;
+      margin-bottom: 20px;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .detail-card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+    }
+
+    .detail-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+
+    .detail-value {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    #detail-description {
+      line-height: 1.7;
+      margin-bottom: 24px;
+      white-space: pre-line;
+    }
+
+    #detail-link {
+      display: inline-block;
+      padding: 12px 20px;
+      border-radius: 10px;
+      background: #1d4ed8;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    #detail-link:hover {
+      opacity: 0.92;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        margin: 10px;
+      }
+
+      .fc .fc-toolbar {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      #detail-title {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="calendar"></div>
+
+  <div id="event-detail">
+    <h2 id="detail-title"></h2>
+
+    <div class="detail-grid">
+      <div class="detail-card">
+        <div class="detail-label">Místo</div>
+        <div class="detail-value" id="detail-location"></div>
+      </div>
+
+      <div class="detail-card">
+        <div class="detail-label">Téma</div>
+        <div class="detail-value" id="detail-theme"></div>
+      </div>
+
+      <div class="detail-card">
+        <div class="detail-label">Pořádá</div>
+        <div class="detail-value" id="detail-organizer"></div>
+      </div>
+    </div>
+
+    <div id="detail-description"></div>
+
+    <a id="detail-link" href="#" target="_blank">
+      Detail akce
+    </a>
+  </div>
+
+  <script>
+    const SHEET_URL =
+      "https://opensheet.elk.sh/1ZufO1oT58PzJsBwWcVyt-lnjlgUg8DuJ-MyHpMfHq7Q/Akce";
+
+    function toIsoDate(day, month, year) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+
+    function addOneDay(isoDate) {
+      const date = new Date(isoDate + "T00:00:00");
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().split("T")[0];
+    }
+
+    function parseCzechDate(value) {
+      if (!value) return null;
+
+      const clean = String(value)
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[–—]/g, "-");
+
+      let single = clean.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/);
+
+      if (single) {
+        return {
+          start: toIsoDate(single[1], single[2], single[3]),
+          end: null
+        };
+      }
+
+      let rangeSameYear = clean.match(
+        /^(\d{1,2})\.\s*(\d{1,2})\.\s*-\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/
+      );
+
+      if (rangeSameYear) {
+        const start = toIsoDate(rangeSameYear[1], rangeSameYear[2], rangeSameYear[5]);
+        const end = toIsoDate(rangeSameYear[3], rangeSameYear[4], rangeSameYear[5]);
+
+        return {
+          start: start,
+          end: addOneDay(end)
+        };
+      }
+
+      let rangeWithYears = clean.match(
+        /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/
+      );
+
+      if (rangeWithYears) {
+        const start = toIsoDate(rangeWithYears[1], rangeWithYears[2], rangeWithYears[3]);
+        const end = toIsoDate(rangeWithYears[4], rangeWithYears[5], rangeWithYears[6]);
+
+        return {
+          start: start,
+          end: addOneDay(end)
+        };
+      }
+
+      return null;
+    }
+
+    function containsCoolregion(value) {
+      return String(value || "")
+        .toLowerCase()
+        .includes("coolregion");
+    }
+
+    async function loadEvents() {
+      const response = await fetch(SHEET_URL);
+      const data = await response.json();
+
+      return data
+        .filter(row => containsCoolregion(row["Kde"]))
+        .map(row => {
+          const parsedDate = parseCzechDate(row["Termín"]);
+
+          if (!parsedDate) return null;
+
+          return {
+            title: row["Akce"] || row["Téma"] || "Akce",
+            start: parsedDate.start,
+            end: parsedDate.end,
+            url: row["Odkaz"] || "",
+            extendedProps: {
+              misto: row["Místo"] || "",
+              tema: row["Téma"] || "",
+              popis: row["Popis akce"] || "",
+              poradatel: row["Pořádá"] || ""
+            }
+          };
+        })
+        .filter(Boolean);
+    }
+
+    document.addEventListener("DOMContentLoaded", async function () {
+      try {
+        const events = await loadEvents();
+
+        const calendar = new FullCalendar.Calendar(
+          document.getElementById("calendar"),
+          {
+            initialView: "dayGridMonth",
+            locale: "cs",
+            firstDay: 1,
+            height: "auto",
+
+            headerToolbar: {
+              left: "prev,next today",
+              center: "title",
+              right: "dayGridMonth,listMonth"
+            },
+
+            buttonText: {
+              today: "Dnes",
+              month: "Měsíc",
+              list: "Seznam"
+            },
+
+            events: events,
+
+            eventClick: function(info) {
+              info.jsEvent.preventDefault();
+
+              const event = info.event;
+              const props = event.extendedProps;
+
+              document.getElementById("event-detail").style.display = "block";
+              document.getElementById("detail-title").innerText = event.title;
+              document.getElementById("detail-location").innerText = props.misto || "-";
+              document.getElementById("detail-theme").innerText = props.tema || "-";
+              document.getElementById("detail-organizer").innerText = props.poradatel || "-";
+              document.getElementById("detail-description").innerText = props.popis || "";
+
+              const detailLink = document.getElementById("detail-link");
+
+              if (event.url) {
+                detailLink.href = event.url;
+                detailLink.style.display = "inline-block";
+              } else {
+                detailLink.href = "#";
+                detailLink.style.display = "none";
+              }
+
+              document.getElementById("event-detail").scrollIntoView({
+                behavior: "smooth"
+              });
+            }
+          }
+        );
+
+        calendar.render();
+
+      } catch(error) {
+        document.getElementById("calendar").innerHTML =
+          '<div style="color:red;text-align:center;margin-top:40px;">Kalendář se nepodařilo načíst.</div>';
+
+        console.error(error);
+      }
+    });
+  </script>
+
+</body>
+</html>      
+<style>
+  border-radius: 8px;
       border: none;
       padding: 8px 14px;
     }
